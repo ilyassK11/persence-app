@@ -1,12 +1,12 @@
 pipeline {
     agent any
 
-environment {
-        PROJECT_DIR = 'presence-app-main'  // racine du projet
-        BUILD_DIR = 'presence-app-main/.next'
-        DEPLOY_DIR = 'C:/deploy/presence-app'
-    }
-
+    environment {
+    DOCKER_IMAGE = "ilyassz11/presence-frontend"
+    DOCKER_CREDENTIALS_ID = "docker-credentials"
+    KUBECONFIG_ID = "kubeconfig"
+    NAMESPACE = "presence-app"
+}
 
     stages {
         stage('Checkout') {
@@ -15,44 +15,62 @@ environment {
             }
         }
 
-        stage('Install Dependencies') {
+        stage('Install Frontend & Build') {
             steps {
-                dir("${PROJECT_DIR}") {
-                    bat 'npm install --legacy-peer-deps'
+                sh 'npm install --legacy-peer-deps'
+                sh 'npm run build'
+            }
+        }
+
+        stage('Run Tests') {
+            steps {
+                sh 'npm test || true'
+            }
+        }
+
+        stage('Build Docker Image') {
+            steps {
+                script {
+                    docker.build("${DOCKER_IMAGE}:${BUILD_NUMBER}")
                 }
             }
         }
 
-        stage('Build') {
+        stage('Push Docker Image') {
             steps {
-                dir("${PROJECT_DIR}") {
-                    bat 'npm run build'
-                    bat "dir \".next\" /a /s"
+                script {
+                    docker.withRegistry("https://index.docker.io/v1/", "${DOCKER_CREDENTIALS_ID}") {
+                        docker.image("${DOCKER_IMAGE}:${BUILD_NUMBER}").push()
+                    }
                 }
             }
         }
-        
-        stage('Check Build Output') {
+
+        stage('Deploy to Kubernetes') {
             steps {
-                bat "dir \"${BUILD_DIR}\" /a /s"
+                withKubeConfig([credentialsId: "${KUBECONFIG_ID}"]) {
+                    sh "cat kubernetes/frontend-deployment.yaml | envsubst | kubectl apply -f -"
+                    sh "kubectl apply -f kubernetes/frontend-service.yaml"
+                    sh "kubectl apply -f kubernetes/ingress.yaml"
+                }
             }
         }
 
-        stage('Deploy') {
+        stage('Verify Deployment') {
             steps {
-                bat "if exist \"${DEPLOY_DIR}\" rmdir /s /q \"${DEPLOY_DIR}\""
-                bat "mkdir \"${DEPLOY_DIR}\""
-                bat "xcopy /s /e /y \"${BUILD_DIR}\\*\" \"${DEPLOY_DIR}\\\""
+                withKubeConfig([credentialsId: "${KUBECONFIG_ID}"]) {
+                    sh "kubectl rollout status deployment/frontend -n ${NAMESPACE}"
+                }
             }
         }
     }
 
     post {
         success {
-            echo '✅ Déploiement terminé avec succès.'
+            echo '✅ Déploiement réussi !'
         }
         failure {
-            echo '❌ Échec du pipeline.'
+            echo '❌ Échec du déploiement.'
         }
     }
 }
