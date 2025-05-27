@@ -1,0 +1,57 @@
+pipeline {
+    agent any
+
+    environment {
+        PROJECT_DIR = 'presence-app-main\\presence-app-main'
+        BUILD_DIR = 'presence-app-main\\presence-app-main\\.next'
+        DEPLOY_DIR = 'C:\\deploy\\presence-app'
+    }
+
+    stages {
+        stage('Checkout') {
+            steps {
+                checkout scm
+            }
+        }
+
+        stage('Install Dependencies') {
+            steps {
+                dir("${PROJECT_DIR}") {
+                    bat 'npm install --legacy-peer-deps'
+                }
+            }
+        }
+
+        stage('Build') {
+            steps {
+                dir("${PROJECT_DIR}") {
+                    bat 'npm run build'
+                    bat "dir \".next\" /a /s"
+                }
+            }
+        }
+        
+        stage('Check Build Output') {
+            steps {
+                bat "dir \"${BUILD_DIR}\" /a /s"
+            }
+        }
+
+        stage('Deploy') {
+            steps {
+                bat "if exist \"${DEPLOY_DIR}\" rmdir /s /q \"${DEPLOY_DIR}\""
+                bat "mkdir \"${DEPLOY_DIR}\""
+                bat "xcopy /s /e /y \"${BUILD_DIR}\\*\" \"${DEPLOY_DIR}\\\""
+            }
+        }
+    }
+
+    post {
+        success {
+            echo '✅ Déploiement terminé avec succès.'
+        }
+        failure {
+            echo '❌ Échec du pipeline.'
+        }
+    }
+}
