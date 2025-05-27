@@ -1,11 +1,12 @@
 pipeline {
     agent any
 
-    environment {
-        PROJECT_DIR = 'presence-app-main\\presence-app-main'
-        BUILD_DIR = 'presence-app-main\\presence-app-main\\.next'
-        DEPLOY_DIR = 'C:\\deploy\\presence-app'
-    }
+   environment {
+    PROJECT_DIR = 'presence-app-main/presence-app-main'
+    BUILD_DIR = 'presence-app-main/presence-app-main/.next'
+    DEPLOY_DIR = 'C:/deploy/presence-app'
+ }
+
 
     stages {
         stage('Checkout') {
